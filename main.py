@@ -1,5 +1,3 @@
-import asyncio
-
 """
 Main.py
 Entry point for the Premium Telegram Sales & Private Channel Access Bot.
@@ -341,4 +339,125 @@ async def generic_text_handler(
 
             handled = True
 
-            if
+            if update.message:
+                try:
+                    await update.message.reply_text(
+                        "⚠️ Something went wrong. Please try again."
+                    )
+                except Exception:
+                    pass
+
+        if handled:
+            break
+
+
+# ---------------------------------------------------------------------------
+# Pre-checkout / successful payment (Telegram Stars)
+# ---------------------------------------------------------------------------
+
+async def precheckout_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    await h_stars.precheckout_callback(update, context)
+
+
+async def successful_payment_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    await h_stars.successful_payment_callback(update, context)
+
+
+# ---------------------------------------------------------------------------
+# Chat join requests (private channel gating)
+# ---------------------------------------------------------------------------
+
+async def chat_join_request_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    await h_join.chat_join_request_callback(update, context)
+
+
+# ---------------------------------------------------------------------------
+# Global error handler
+# ---------------------------------------------------------------------------
+
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    logger.exception(
+        "Unhandled exception while processing update: %s",
+        update,
+        exc_info=context.error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Application setup
+# ---------------------------------------------------------------------------
+
+def build_application() -> Application:
+    application = (
+        ApplicationBuilder()
+        .token(config.BOT_TOKEN)
+        .build()
+    )
+
+    application.add_handler(CommandHandler("start", cmd_start))
+    application.add_handler(CommandHandler("admin", cmd_admin))
+
+    application.add_handler(CallbackQueryHandler(callback_router))
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            generic_text_handler,
+        )
+    )
+
+    application.add_handler(
+        PreCheckoutQueryHandler(precheckout_callback)
+    )
+
+    application.add_handler(
+        MessageHandler(
+            filters.SUCCESSFUL_PAYMENT,
+            successful_payment_callback,
+        )
+    )
+
+    application.add_handler(
+        ChatJoinRequestHandler(chat_join_request_callback)
+    )
+
+    application.add_error_handler(error_handler)
+
+    return application
+
+
+async def _on_startup(application: Application) -> None:
+    await db.init_db()
+    logger.info("Database initialized.")
+
+
+def main() -> None:
+    application = build_application()
+    application.post_init = _on_startup
+
+    logger.info("Starting bot polling...")
+
+    try:
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+        )
+    except Exception:
+        logger.exception("Bot crashed.")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+    
